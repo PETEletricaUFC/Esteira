@@ -1,0 +1,136 @@
+#include <Wire.h>
+#include <LiquidCrystal.h>
+#include "Adafruit_TCS34725.h"
+
+LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
+const int sensorIR = 3;
+
+// Parâmetros ajustáveis
+#define MIN_LUMINOSIDADE 150
+#define VERMELHO_PERC_MIN 28
+#define VERDE_PERC_MIN 26
+#define AZUL_PERC_MIN 24
+#define DIFERENCA_MIN_VERMELHO 5
+#define DIFERENCA_MIN_VERDE 3.5
+
+// Variáveis de temporização
+unsigned long tempoDeteccao = 0;
+const unsigned long atrasoLeitura = 150;  // 300ms = tempo para objeto chegar no sensor de cor
+int estadoLeitura = 0;  // 0: ocioso, 1: aguardando leitura
+
+// Variáveis globais
+int contador = 0;
+bool ultimoEstadoIR = HIGH;
+
+// Variáveis da ponte H
+const int IN3 = 5; // direção 1
+const int IN4 = 4; // direção 2
+const int ENB = 6; // PWM
+
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+
+void setup() {
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(sensorIR, INPUT_PULLUP);
+  lcd.begin(16, 2);
+  Serial.begin(9600);
+
+  lcd.print("Inicializando...");
+  
+  if (!tcs.begin()) {
+    lcd.clear();
+    lcd.print("Erro sensor cor");
+    while (1);
+  }
+
+  lcd.clear();
+  lcd.print("Cor: ");
+  lcd.setCursor(0, 1);
+  lcd.print("Total: ");
+}
+
+void loop() {
+  bool estadoAtualIR = digitalRead(sensorIR);
+  unsigned long tempoAtual = millis();
+
+//função da velocidade do motor
+  motor();
+
+  // Detecção de nova borda de descida (objeto entrando)
+  if (estadoAtualIR == LOW && ultimoEstadoIR == HIGH) {
+    contador++;
+    estadoLeitura = 1;
+    tempoDeteccao = tempoAtual;
+    atualizarContador(contador);
+    atualizarCor("AGUARD..");
+  }
+
+  // Máquina de estados para controle da leitura de cor
+  if (estadoLeitura == 1 && (tempoAtual - tempoDeteccao >= atrasoLeitura)) {
+    uint16_t r, g, b;
+    lerCor(&r, &g, &b);
+    String cor = identificarCor(r, g, b);
+    atualizarCor(cor);
+    estadoLeitura = 0;
+  }
+
+  ultimoEstadoIR = estadoAtualIR;
+  delay(10);
+}
+
+void lerCor(uint16_t *r, uint16_t *g, uint16_t *b) {
+  uint16_t dummy;
+  tcs.getRawData(r, g, b, &dummy);
+}
+
+String identificarCor(uint16_t r, uint16_t g, uint16_t b) {
+  uint32_t total = r + g + b;
+  if (total < MIN_LUMINOSIDADE) return "ESCURO";
+
+  float percR = (r * 100.0) / total;
+  float percG = (g * 100.0) / total;
+  float percB = (b * 100.0) / total;
+
+  // Vermelho
+  if (percR > VERMELHO_PERC_MIN && 
+      (percR - percG > DIFERENCA_MIN_VERMELHO) && 
+      (percR - percB > DIFERENCA_MIN_VERMELHO)) {
+    return "VERMELHO";
+  }
+  
+  // Verde
+  if (percG > VERDE_PERC_MIN && 
+      (percG - percR > DIFERENCA_MIN_VERDE) && 
+      (percG - percB > DIFERENCA_MIN_VERDE)) {
+    return "VERDE";
+  }
+  
+  // Azul
+  if (percB > AZUL_PERC_MIN && percB > percR && percB > percG) {
+    return "AZUL";
+  }
+
+  return "INDEF";
+}
+
+void atualizarCor(String cor) {
+  lcd.setCursor(5, 0);
+  lcd.print("       ");
+  lcd.setCursor(5, 0);
+  lcd.print(cor);
+}
+
+void atualizarContador(int total) {
+  lcd.setCursor(7, 1);
+  lcd.print("     ");
+  lcd.setCursor(7, 1);
+  lcd.print(total);
+}
+
+void motor() {
+digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 145); // velocidade (0 a 255)
+}
