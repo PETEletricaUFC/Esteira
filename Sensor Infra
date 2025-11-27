@@ -1,0 +1,16 @@
+const int sensorIR = 3;
+
+void setup() {
+  pinMode(sensorIR, INPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  int leitura = digitalRead(sensorIR);
+  if (leitura == LOW) {
+    Serial.println("Objeto detectado");
+  } else {
+    Serial.println("Sem objeto");
+  }
+  delay(300);
+}
