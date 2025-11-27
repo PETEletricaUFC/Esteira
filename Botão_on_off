@@ -1,0 +1,20 @@
+const int botaoPin = 2;
+bool sistemaAtivo = false;
+
+void setup() {
+  pinMode(botaoPin, INPUT_PULLUP);
+  Serial.begin(9600);
+}
+
+void loop() {
+  static bool ultimoEstado = HIGH;
+  bool estadoAtual = digitalRead(botaoPin);
+
+  if (estadoAtual == LOW && ultimoEstado == HIGH) {
+    delay(50); // debounce
+    sistemaAtivo = !sistemaAtivo;
+    Serial.println(sistemaAtivo ? "Sistema Ativo" : "Sistema Inativo");
+  }
+
+  ultimoEstado = estadoAtual;
+}
